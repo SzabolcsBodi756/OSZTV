@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Osztályozó feladatsor</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <main class="page">
+    <h1 class="title">Osztályozó feladatsor</h1>
+
+    <section id="loader" class="card">
+      <div class="row">
+        <div class="grow">
+          <div class="hint">Kérdések fájlból: <code>kerdesek.txt</code></div>
+          <div class="subhint">Ha nem tölt be, ellenőrizd, hogy a fájl a repo gyökerében van-e.</div>
+        </div>
+        <button id="btnReload" class="btn secondary" type="button">Újrakezdés</button>
+      </div>
+
+      <div id="loadError" class="alert hidden"></div>
+
+      <div class="row wrap">
+        <label class="file">
+          <input id="fileInput" type="file" accept=".txt,.json" />
+          <span>Fájl betöltése (.txt / .json)</span>
+        </label>
+        <div class="small">Alapértelmezett: automatikusan próbálja betölteni a <code>./kerdesek.txt</code>-t.</div>
+      </div>
+    </section>
+
+    <section id="quiz" class="card hidden">
+      <div class="topbar">
+        <div id="counter" class="counter"></div>
+        <div class="score"><span>Pont:</span> <strong id="score">0</strong></div>
+      </div>
+
+      <h2 id="question" class="question"></h2>
+      <div id="answers" class="answers"></div>
+
+      <div class="footer">
+        <div class="small" id="multiHint"></div>
+      </div>
+    </section>
+
+    <section id="result" class="card hidden">
+      <h2 class="resultTitle">Kész 🎉</h2>
+      <div class="resultStats">
+        <div><strong id="resPoints"></strong></div>
+        <div><strong id="resPercent"></strong></div>
+      </div>
+
+      <div class="row wrap">
+        <button id="btnRestart" class="btn" type="button">Újrakezdés</button>
+      </div>
+
+      <hr class="sep" />
+
+      <h3 class="reviewTitle">Összes kérdés és válasz</h3>
+      <div id="review" class="review"></div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
