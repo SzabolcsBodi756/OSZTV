@@ -125,45 +125,43 @@
   // B) JS fájl:  const kerdesek = [ ... ];   (pont ez!)
   // + opcionálisan questions néven is
   function parseKerdesekSmart(text) {
-    const raw = String(text ?? "").trim();
-    if (!raw) throw new Error("Üres fájl.");
+  const raw = String(text ?? "").trim();
+  if (!raw) throw new Error("Üres fájl.");
 
-    // BOM eltávolítás
-    const cleaned = raw.replace(/^\uFEFF/, "");
+  const cleaned = raw.replace(/^\uFEFF/, "");
 
-    // 1) Próbáljuk tiszta JSON-ként
-    try {
-      const json = JSON.parse(cleaned);
-      return normalizeKerdesek(json);
-    } catch {
-      // nem JSON, megyünk tovább
-    }
-
-    // 2) JS: const kerdesek = [ ... ];
-    let list = null;
-    try {
-      const fn = new Function(
-        '"use strict";\n' +
-          "let kerdesek;\n" +
-          "let questions;\n" +
-          cleaned + "\n" +
-          "return (typeof kerdesek !== 'undefined' ? kerdesek : (typeof questions !== 'undefined' ? questions : null));"
-      );
-      list = fn();
-    } catch (e) {
-      throw new Error(
-        "A kerdesek.txt nem JSON és JS-ként sem értékelhető ki. " +
-          "Ellenőrizd, hogy tényleg 'const kerdesek = [ ... ]' formátumú-e.\n" +
-          "Részlet: " + (e?.message || e)
-      );
-    }
-
-    if (!list) {
-      throw new Error("Nem találok 'kerdesek' tömböt a kerdesek.txt-ben.");
-    }
-
-    return normalizeKerdesek(list);
+  // 1) JSON próbálkozás
+  try {
+    const json = JSON.parse(cleaned);
+    return normalizeKerdesek(json);
+  } catch {
+    // nem JSON → tovább
   }
+
+  // 2) JS fájl: const kerdesek = [ ... ];
+  let list;
+  try {
+    const fn = new Function(
+      '"use strict";\n' +
+      cleaned + "\n" +
+      "return typeof kerdesek !== 'undefined' ? kerdesek : " +
+      "(typeof questions !== 'undefined' ? questions : null);"
+    );
+    list = fn();
+  } catch (e) {
+    throw new Error(
+      "A kerdesek.txt JS-ként nem futtatható.\n" +
+      "Részlet: " + (e?.message || e)
+    );
+  }
+
+  if (!list) {
+    throw new Error("Nem találok 'kerdesek' tömböt a kerdesek.txt-ben.");
+  }
+
+  return normalizeKerdesek(list);
+}
+
 
   // ---- Fájl betöltés (repo gyökérből) ----
   async function loadDefaultFile() {
@@ -429,3 +427,4 @@
     }
   })();
 })();
+
