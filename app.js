@@ -32,6 +32,77 @@
   // { kerdes, valaszok[], helyesSet(Set), userSet(Set) }
   let attempts = [];
 
+function normalizeKerdesek(list) {
+  if (!Array.isArray(list)) throw new Error("A kérdéslista nem tömb.");
+
+  return list.map((q, i) => {
+    if (!q || typeof q !== "object") throw new Error(`Hibás elem (#${i + 1}): nem objektum.`);
+
+    const kerdes = String(q.kerdes ?? "").trim();
+    const valaszok = Array.isArray(q.valaszok) ? q.valaszok.map(v => String(v)) : null;
+
+    if (!kerdes) throw new Error(`Hiányzó 'kerdes' (#${i + 1}).`);
+    if (!valaszok || valaszok.length < 2) throw new Error(`Hiányzó/hibás 'valaszok' (#${i + 1}).`);
+
+    let helyes = q.helyes;
+    if (Array.isArray(helyes)) {
+      helyes = helyes.map(Number);
+    } else {
+      helyes = [Number(helyes)];
+    }
+
+    if (helyes.some(n => !Number.isInteger(n))) {
+      throw new Error(`Hibás 'helyes' (#${i + 1}): csak index(ek) lehet(nek).`);
+    }
+
+    return { kerdes, valaszok, helyes };
+  });
+}
+
+function parseKerdesekSmart(text) {
+  const raw = String(text ?? "").trim();
+
+  // 1) Próbáljuk JSON-ként (ha valaki egyszer mégis JSON-t töltene be)
+  try {
+    const json = JSON.parse(raw);
+    return normalizeKerdesek(json);
+  } catch {
+    // megyünk tovább
+  }
+
+  // 2) JS formátum: const kerdesek = [ ... ];
+  // Kivesszük a BOM-ot is, ha van
+  const cleaned = raw.replace(/^\uFEFF/, "");
+
+  // Kiértékelés izolált scope-ban
+  // - nincs hozzáférés külső változókhoz
+  // - csak azt vesszük ki, amit a fájl létrehoz: kerdesek / questions
+  let list = null;
+  try {
+    const fn = new Function(
+      '"use strict";\n' +
+      "let kerdesek;\n" +
+      "let questions;\n" +
+      cleaned + "\n" +
+      "return (typeof kerdesek !== 'undefined' ? kerdesek : (typeof questions !== 'undefined' ? questions : null));"
+    );
+    list = fn();
+  } catch (e) {
+    throw new Error(
+      "A kerdesek.txt nem JSON és JS-ként sem értékelhető ki. " +
+      "Ellenőrizd, hogy tényleg 'const kerdesek = [ ... ]' formátumú-e.\n" +
+      "Részlet: " + (e?.message || e)
+    );
+  }
+
+  if (!list) {
+    throw new Error("Nem találok 'kerdesek' tömböt a kerdesek.txt-ben.");
+  }
+
+  return normalizeKerdesek(list);
+}
+
+  
   function show(el) { el.classList.remove("hidden"); }
   function hide(el) { el.classList.add("hidden"); }
 
@@ -126,9 +197,10 @@
   async function loadDefaultFile() {
     // relatív út, működik GitHub Pages subfolderben is
     const resp = await fetch("./kerdesek.txt", { cache: "no-store" });
-    if (!resp.ok) throw new Error("Nem találom a kerdesek.txt fájlt a repo gyökerében.");
-    const text = await resp.text();
-    return parseKerdesekFromText(text);
+if (!resp.ok) throw new Error("Nem találom a kerdesek.txt fájlt a repo gyökerében.");
+const text = await resp.text();
+return parseKerdesekSmart(text);
+
   }
 
   function resetQuiz(newList) {
@@ -404,3 +476,4 @@
     }
   })();
 })();
+
