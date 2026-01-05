@@ -21,6 +21,22 @@
   const btnRestart = document.getElementById("btnRestart");
   const fileInput = document.getElementById("fileInput");
 
+  // Ha valami ID hiányzik, ne némán haljon el:
+  const must = [
+    ["loader", elLoader], ["quiz", elQuiz], ["result", elResult],
+    ["counter", elCounter], ["question", elQuestion], ["answers", elAnswers],
+    ["score", elScore], ["multiHint", elMultiHint],
+    ["resPoints", elResPoints], ["resPercent", elResPercent], ["review", elReview],
+    ["loadError", elLoadError], ["fileInput", fileInput]
+  ];
+  for (const [id, el] of must) {
+    if (!el) {
+      // eslint-disable-next-line no-alert
+      alert(`Hiányzó elem az index.html-ben: #${id}`);
+      return;
+    }
+  }
+
   // ---- State ----
   let allKerdesek = [];
   let quiz = [];
@@ -29,20 +45,14 @@
   let locked = false;
   let activeTimeout = null;
 
-  // review-hoz
-  // { kerdes, valaszok[], helyesSet(Set), userSet(Set) }
+  // review-hoz: { kerdes, valaszok[], helyesSet(Set), userSet(Set) }
   let attempts = [];
 
   // ---- Utils ----
-  function show(el) {
-    el?.classList.remove("hidden");
-  }
-  function hide(el) {
-    el?.classList.add("hidden");
-  }
+  function show(el) { el.classList.remove("hidden"); }
+  function hide(el) { el.classList.add("hidden"); }
 
   function setError(msg) {
-    if (!elLoadError) return;
     if (!msg) {
       elLoadError.textContent = "";
       elLoadError.classList.add("hidden");
@@ -87,14 +97,11 @@
       const valaszok = Array.isArray(q.valaszok) ? q.valaszok.map(v => String(v)) : null;
 
       if (!kerdes) throw new Error(`Hiányzó 'kerdes' (#${i + 1}).`);
-      if (!valaszok || valaszok.length < 2) {
-        throw new Error(`Hiányzó/hibás 'valaszok' (#${i + 1}).`);
-      }
+      if (!valaszok || valaszok.length < 2) throw new Error(`Hiányzó/hibás 'valaszok' (#${i + 1}).`);
       if (!("helyes" in q)) throw new Error(`Hiányzó 'helyes' (#${i + 1}).`);
 
       let helyes = q.helyes;
 
-      // helyes lehet szám / tömb / szám-szerű string
       if (Array.isArray(helyes)) helyes = helyes.map(Number);
       else helyes = [Number(helyes)];
 
@@ -110,67 +117,49 @@
         }
       }
 
-      // duplikált indexek kiszűrése
       helyes = [...new Set(helyes)];
-
       return { kerdes, valaszok, helyes };
     });
   }
 
-  /**
-   * Parser, ami KIFEJEZETTEN a te kerdesek.txt formádat is megeszi:
-   * - A fájl így néz ki: const kerdesek = [ { kerdes: "...", valaszok:[...], helyes: 1 }, ... ]
-   * - Nem JSON (kulcsok nincsenek idézőjelezve) -> JSON.parse elbukna
-   *
-   * Megoldás: nem futtatjuk le a "const kerdesek = ..." részt változóként,
-   * hanem kiszedjük belőle a [ ... ] tömb literált, és azt értékeljük ki:
-   *   return ( [ ... ] );
-   *
-   * Így NINCS "Identifier 'kerdesek' has already been declared" hiba.
-   */
+  // ---- Parser: a TE formádhoz (const kerdesek = [ ... ]) ----
   function parseKerdesekSmart(text) {
-    const raw = String(text ?? "");
-    const cleaned = raw.replace(/^\uFEFF/, "").trim();
-    if (!cleaned) throw new Error("Üres fájl.");
+    const raw = String(text ?? "").trim();
+    if (!raw) throw new Error("Üres fájl.");
 
-    // 1) Ha valaki mégis tiszta JSON tömböt adna
+    const cleaned = raw.replace(/^\uFEFF/, "");
+
+    // 1) JSON próbálkozás (ha valaki JSON-t töltene fel)
     try {
       const json = JSON.parse(cleaned);
       return normalizeKerdesek(json);
     } catch {
-      // nem JSON -> tovább
+      // nem JSON
     }
 
-    // 2) A te formád: const kerdesek = [ ... ];
-    // Kiszedjük a legelső [ és legutolsó ] közti részt, és azt értékeljük ki JS-ként.
-    const start = cleaned.indexOf("[");
-    const end = cleaned.lastIndexOf("]");
-    if (start === -1 || end === -1 || end <= start) {
-      throw new Error(
-        "Nem találok [ ... ] tömböt a kerdesek.txt-ben. " +
-          "Maradjon ez a forma: const kerdesek = [ ... ]"
-      );
-    }
-
-    const arrText = cleaned.slice(start, end + 1);
-
-    let list;
+    // 2) JS: const kerdesek = [ ... ];
+    // FONTOS: nem deklarálunk előre kerdesek-et, mert akkor ütközik a "const kerdesek" miatt
+    let list = null;
     try {
-      // zárójelbe tesszük, hogy expression legyen
-      list = new Function('"use strict"; return (' + arrText + ');')();
+      const fn = new Function(
+        '"use strict";\n' +
+        cleaned + "\n" +
+        "return (typeof kerdesek !== 'undefined' ? kerdesek : (typeof questions !== 'undefined' ? questions : null));"
+      );
+      list = fn();
     } catch (e) {
       throw new Error(
-        "A kerdesek.txt tömb része nem értékelhető ki.\n" +
-          "Részlet: " + (e?.message || e)
+        "A kerdesek.txt nem JSON és JS-ként sem futtatható.\n" +
+        "Részlet: " + (e?.message || e)
       );
     }
 
+    if (!list) throw new Error("Nem találok 'kerdesek' tömböt a kerdesek.txt-ben.");
     return normalizeKerdesek(list);
   }
 
   // ---- Fájl betöltés (repo gyökérből) ----
   async function loadDefaultFile() {
-    // GitHub Pages-en jó: a kerdesek.txt a repo rootban van
     const resp = await fetch("./kerdesek.txt", { cache: "no-store" });
     if (!resp.ok) throw new Error("Nem találom a kerdesek.txt fájlt a repo gyökerében.");
     const text = await resp.text();
@@ -184,44 +173,53 @@
     pont = 0;
     locked = false;
     attempts = [];
-    if (elScore) elScore.textContent = "0";
+    elScore.textContent = "0";
     setError("");
     hide(elResult);
     show(elQuiz);
     showQuestion();
   }
 
+  // ---- MULTI kijelölés fallback (ha a CSS nem látszik) ----
+  function applyPickedVisual(div, isPicked) {
+    div.classList.toggle("picked", isPicked);
+
+    // Inline fallback: ha a CSS-ed bármiért nem érvényesül, ez akkor is látszik
+    if (isPicked) {
+      div.style.borderColor = "rgba(255,255,255,0.95)";
+      div.style.background = "rgba(255,255,255,0.08)";
+      div.style.boxShadow = "0 0 0 2px rgba(255,255,255,0.35) inset";
+    } else {
+      div.style.borderColor = "";
+      div.style.background = "";
+      div.style.boxShadow = "";
+    }
+  }
+
   function showQuestion() {
     clearTimers();
     locked = false;
 
-    if (elAnswers) elAnswers.innerHTML = "";
-    if (elMultiHint) elMultiHint.textContent = "";
+    elAnswers.innerHTML = "";
+    elMultiHint.textContent = "";
 
-    if (idx >= quiz.length) {
-      return showResults();
-    }
+    if (idx >= quiz.length) return showResults();
 
-    if (elCounter) elCounter.textContent = `Kérdés ${idx + 1} / ${quiz.length}`;
+    elCounter.textContent = `Kérdés ${idx + 1} / ${quiz.length}`;
 
     const q = quiz[idx];
-    if (elQuestion) elQuestion.textContent = q.kerdes;
+    elQuestion.textContent = q.kerdes;
 
     const helyesSet = new Set(q.helyes);
     const isMulti = helyesSet.size > 1;
-    if (elMultiHint) {
-      elMultiHint.textContent = isMulti
-        ? "Megjegyzés: ennél a kérdésnél több helyes válasz is lehet."
-        : "";
-    }
+    elMultiHint.textContent = isMulti ? "Megjegyzés: ennél a kérdésnél több helyes válasz is lehet." : "";
 
-    // válaszok keverése (az eredeti indexet visszük tovább)
     const pairs = q.valaszok.map((text, originalIndex) => ({ text, originalIndex }));
     const shuffledPairs = shuffle(pairs);
 
     const userSet = new Set();
 
-    if (isMulti && elAnswers) {
+    if (isMulti) {
       const info = document.createElement("div");
       info.className = "small";
       info.textContent = "Jelöld be az összes helyes választ, majd kattints a „Véglegesítés” gombra.";
@@ -233,6 +231,10 @@
       div.className = "answer";
       div.textContent = p.text;
 
+      // accessibility + állapot
+      div.setAttribute("role", "button");
+      div.setAttribute("aria-pressed", "false");
+
       div.addEventListener("click", () => {
         if (locked) return;
 
@@ -243,22 +245,22 @@
         }
 
         // multi: toggle
-        // multi-choice: toggle
-        if (userSet.has(p.originalIndex)) {
-            userSet.delete(p.originalIndex);
-            div.classList.remove("picked");
-            div.setAttribute("aria-pressed", "false");
+        const picked = userSet.has(p.originalIndex);
+        if (picked) {
+          userSet.delete(p.originalIndex);
+          div.setAttribute("aria-pressed", "false");
+          applyPickedVisual(div, false);
         } else {
-            userSet.add(p.originalIndex);
-            div.classList.add("picked");
-            div.setAttribute("aria-pressed", "true");
+          userSet.add(p.originalIndex);
+          div.setAttribute("aria-pressed", "true");
+          applyPickedVisual(div, true);
         }
+      });
 
-
-      elAnswers?.appendChild(div);
+      elAnswers.appendChild(div);
     });
 
-    if (isMulti && elAnswers) {
+    if (isMulti) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn";
@@ -281,18 +283,14 @@
     if (correct) {
       clickedDiv.classList.add("correct");
       pont++;
-      if (elScore) elScore.textContent = String(pont);
+      elScore.textContent = String(pont);
     } else {
       clickedDiv.classList.add("wrong");
-
-      // helyes(ek) megjelölése
-      const answerDivs = [...(elAnswers?.querySelectorAll(".answer") ?? [])];
+      const answerDivs = [...elAnswers.querySelectorAll(".answer")];
       answerDivs.forEach((div) => {
         const text = div.textContent;
         const pair = shuffledPairs.find(x => x.text === text);
-        if (pair && helyesSet.has(pair.originalIndex)) {
-          div.classList.add("correct");
-        }
+        if (pair && helyesSet.has(pair.originalIndex)) div.classList.add("correct");
       });
     }
 
@@ -312,8 +310,7 @@
   function evaluateMulti(shuffledPairs, helyesSet, userSet) {
     const correctAll = setsEqual(userSet, helyesSet);
 
-    // végleges színezés
-    const answerDivs = [...(elAnswers?.querySelectorAll(".answer") ?? [])];
+    const answerDivs = [...elAnswers.querySelectorAll(".answer")];
 
     answerDivs.forEach((div) => {
       const text = div.textContent;
@@ -324,6 +321,8 @@
       const chosen = userSet.has(pair.originalIndex);
 
       div.classList.remove("correct", "wrong");
+      // picked vizuált ne hagyjuk bent értékelés után
+      applyPickedVisual(div, false);
 
       if (isCorrect) div.classList.add("correct");
       if (chosen && !isCorrect) div.classList.add("wrong");
@@ -331,7 +330,7 @@
 
     if (correctAll) {
       pont++;
-      if (elScore) elScore.textContent = String(pont);
+      elScore.textContent = String(pont);
     }
 
     attempts.push({
@@ -355,10 +354,9 @@
     const total = quiz.length || 1;
     const percent = Math.round((pont / total) * 100);
 
-    if (elResPoints) elResPoints.textContent = `Eredmény: ${pont} / ${quiz.length}`;
-    if (elResPercent) elResPercent.textContent = `${percent}%`;
+    elResPoints.textContent = `Eredmény: ${pont} / ${quiz.length}`;
+    elResPercent.textContent = `${percent}%`;
 
-    if (!elReview) return;
     elReview.innerHTML = "";
 
     attempts.forEach((a, i) => {
@@ -410,7 +408,7 @@
   btnReload?.addEventListener("click", () => location.reload());
   btnRestart?.addEventListener("click", () => location.reload());
 
-  fileInput?.addEventListener("change", async (e) => {
+  fileInput.addEventListener("change", async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
@@ -424,6 +422,14 @@
     } finally {
       fileInput.value = "";
     }
+  });
+
+  // Globális hibák a piros dobozba (hogy ne legyen néma)
+  window.addEventListener("error", (e) => {
+    setError("JS hiba: " + (e?.message || "ismeretlen hiba"));
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    setError("Promise hiba: " + (e?.reason?.message || e?.reason || "ismeretlen hiba"));
   });
 
   // ---- boot ----
@@ -440,5 +446,3 @@
     }
   })();
 })();
-
-
