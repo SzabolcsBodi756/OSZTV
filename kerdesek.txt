@@ -660,5 +660,4 @@ const kerdesek = [
   { "kerdes": "Mi a fő célja a privileged access management-nek (PAM)?", "valaszok": ["Privilegizált fiókok biztonságos kezelése és ellenőrzése","IP-cím kiosztás","Switch portok konfigurálása","Adatátvitel titkosítása"], "helyes": 0 },
   { "kerdes": "Mi a fő célja a network intrusion prevention-nek?", "valaszok": ["Hálózati támadások valós idejű blokkolása","IP-cím kiosztás","Switch portok konfigurálása","Broadcast blokkolása"], "helyes": 0 },
   { "kerdes": "Mi a fő célja a security orchestration, automation and response (SOAR) rendszereknek?", "valaszok": ["Biztonsági folyamatok automatizálása és koordinálása","IP-cím kiosztás","Switch portok konfigurálása","Adatátvitel titkosítása"], "helyes": 0 }
-
-];
+]
