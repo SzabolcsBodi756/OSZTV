@@ -244,15 +244,15 @@
 
         // multi: toggle
         // multi-choice: toggle
-if (userSet.has(p.originalIndex)) {
-  userSet.delete(p.originalIndex);
-  div.classList.remove("picked");
-  div.setAttribute("aria-pressed", "false");
-} else {
-  userSet.add(p.originalIndex);
-  div.classList.add("picked");
-  div.setAttribute("aria-pressed", "true");
-}
+        if (userSet.has(p.originalIndex)) {
+            userSet.delete(p.originalIndex);
+            div.classList.remove("picked");
+            div.setAttribute("aria-pressed", "false");
+        } else {
+            userSet.add(p.originalIndex);
+            div.classList.add("picked");
+            div.setAttribute("aria-pressed", "true");
+        }
 
 
       elAnswers?.appendChild(div);
@@ -440,4 +440,5 @@ if (userSet.has(p.originalIndex)) {
     }
   })();
 })();
+
 
