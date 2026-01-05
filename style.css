@@ -221,3 +221,17 @@ body{
   background: rgba(255, 255, 255, 0.08);
   box-shadow: 0 0 0 1px rgba(255,255,255,0.4);
 }
+
+/* MULTI kiválasztás vizuális jelzése */
+.answer.picked{
+  border-color: rgba(255,255,255,0.95) !important;
+  background: rgba(255,255,255,0.08) !important;
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,0.35) inset,
+    0 0 0 1px rgba(0,0,0,0.35);
+}
+
+/* opcionális: hover erősebb legyen */
+.answer:hover{
+  border-color: rgba(255,255,255,0.25);
+}
