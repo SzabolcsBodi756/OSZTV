@@ -35,13 +35,14 @@
 
   // ---- Utils ----
   function show(el) {
-    el.classList.remove("hidden");
+    el?.classList.remove("hidden");
   }
   function hide(el) {
-    el.classList.add("hidden");
+    el?.classList.add("hidden");
   }
 
   function setError(msg) {
+    if (!elLoadError) return;
     if (!msg) {
       elLoadError.textContent = "";
       elLoadError.classList.add("hidden");
@@ -93,12 +94,9 @@
 
       let helyes = q.helyes;
 
-      // helyes lehet szám / tömb / (szám-szerű string)
-      if (Array.isArray(helyes)) {
-        helyes = helyes.map(Number);
-      } else {
-        helyes = [Number(helyes)];
-      }
+      // helyes lehet szám / tömb / szám-szerű string
+      if (Array.isArray(helyes)) helyes = helyes.map(Number);
+      else helyes = [Number(helyes)];
 
       if (helyes.length < 1) throw new Error(`Üres 'helyes' (#${i + 1}).`);
       if (helyes.some(n => !Number.isInteger(n))) {
@@ -112,60 +110,67 @@
         }
       }
 
-      // Duplikált indexek kiszűrése
+      // duplikált indexek kiszűrése
       helyes = [...new Set(helyes)];
 
       return { kerdes, valaszok, helyes };
     });
   }
 
-  // ---- Okos parser: pontosan a TE kerdesek.txt formádhoz is ----
-  // Elfogad:
-  // A) JSON tömb: [ { kerdes:"", valaszok:[...], helyes: 0 }, ... ]
-  // B) JS fájl:  const kerdesek = [ ... ];   (pont ez!)
-  // + opcionálisan questions néven is
+  /**
+   * Parser, ami KIFEJEZETTEN a te kerdesek.txt formádat is megeszi:
+   * - A fájl így néz ki: const kerdesek = [ { kerdes: "...", valaszok:[...], helyes: 1 }, ... ]
+   * - Nem JSON (kulcsok nincsenek idézőjelezve) -> JSON.parse elbukna
+   *
+   * Megoldás: nem futtatjuk le a "const kerdesek = ..." részt változóként,
+   * hanem kiszedjük belőle a [ ... ] tömb literált, és azt értékeljük ki:
+   *   return ( [ ... ] );
+   *
+   * Így NINCS "Identifier 'kerdesek' has already been declared" hiba.
+   */
   function parseKerdesekSmart(text) {
-  const raw = String(text ?? "").trim();
-  if (!raw) throw new Error("Üres fájl.");
+    const raw = String(text ?? "");
+    const cleaned = raw.replace(/^\uFEFF/, "").trim();
+    if (!cleaned) throw new Error("Üres fájl.");
 
-  const cleaned = raw.replace(/^\uFEFF/, "");
+    // 1) Ha valaki mégis tiszta JSON tömböt adna
+    try {
+      const json = JSON.parse(cleaned);
+      return normalizeKerdesek(json);
+    } catch {
+      // nem JSON -> tovább
+    }
 
-  // 1) JSON próbálkozás
-  try {
-    const json = JSON.parse(cleaned);
-    return normalizeKerdesek(json);
-  } catch {
-    // nem JSON → tovább
+    // 2) A te formád: const kerdesek = [ ... ];
+    // Kiszedjük a legelső [ és legutolsó ] közti részt, és azt értékeljük ki JS-ként.
+    const start = cleaned.indexOf("[");
+    const end = cleaned.lastIndexOf("]");
+    if (start === -1 || end === -1 || end <= start) {
+      throw new Error(
+        "Nem találok [ ... ] tömböt a kerdesek.txt-ben. " +
+          "Maradjon ez a forma: const kerdesek = [ ... ]"
+      );
+    }
+
+    const arrText = cleaned.slice(start, end + 1);
+
+    let list;
+    try {
+      // zárójelbe tesszük, hogy expression legyen
+      list = new Function('"use strict"; return (' + arrText + ');')();
+    } catch (e) {
+      throw new Error(
+        "A kerdesek.txt tömb része nem értékelhető ki.\n" +
+          "Részlet: " + (e?.message || e)
+      );
+    }
+
+    return normalizeKerdesek(list);
   }
-
-  // 2) JS fájl: const kerdesek = [ ... ];
-  let list;
-  try {
-    const fn = new Function(
-      '"use strict";\n' +
-      cleaned + "\n" +
-      "return typeof kerdesek !== 'undefined' ? kerdesek : " +
-      "(typeof questions !== 'undefined' ? questions : null);"
-    );
-    list = fn();
-  } catch (e) {
-    throw new Error(
-      "A kerdesek.txt JS-ként nem futtatható.\n" +
-      "Részlet: " + (e?.message || e)
-    );
-  }
-
-  if (!list) {
-    throw new Error("Nem találok 'kerdesek' tömböt a kerdesek.txt-ben.");
-  }
-
-  return normalizeKerdesek(list);
-}
-
 
   // ---- Fájl betöltés (repo gyökérből) ----
   async function loadDefaultFile() {
-    // GitHub Pages-en a repo root = az oldal gyökere, így ez jó:
+    // GitHub Pages-en jó: a kerdesek.txt a repo rootban van
     const resp = await fetch("./kerdesek.txt", { cache: "no-store" });
     if (!resp.ok) throw new Error("Nem találom a kerdesek.txt fájlt a repo gyökerében.");
     const text = await resp.text();
@@ -179,7 +184,7 @@
     pont = 0;
     locked = false;
     attempts = [];
-    elScore.textContent = "0";
+    if (elScore) elScore.textContent = "0";
     setError("");
     hide(elResult);
     show(elQuiz);
@@ -190,29 +195,33 @@
     clearTimers();
     locked = false;
 
-    elAnswers.innerHTML = "";
-    elMultiHint.textContent = "";
+    if (elAnswers) elAnswers.innerHTML = "";
+    if (elMultiHint) elMultiHint.textContent = "";
 
     if (idx >= quiz.length) {
       return showResults();
     }
 
-    elCounter.textContent = `Kérdés ${idx + 1} / ${quiz.length}`;
+    if (elCounter) elCounter.textContent = `Kérdés ${idx + 1} / ${quiz.length}`;
 
     const q = quiz[idx];
-    elQuestion.textContent = q.kerdes;
+    if (elQuestion) elQuestion.textContent = q.kerdes;
 
     const helyesSet = new Set(q.helyes);
     const isMulti = helyesSet.size > 1;
-    elMultiHint.textContent = isMulti ? "Megjegyzés: ennél a kérdésnél több helyes válasz is lehet." : "";
+    if (elMultiHint) {
+      elMultiHint.textContent = isMulti
+        ? "Megjegyzés: ennél a kérdésnél több helyes válasz is lehet."
+        : "";
+    }
 
-    // válaszok keverése, de a helyes indexeket a "régi" indexek alapján kezeljük
+    // válaszok keverése (az eredeti indexet visszük tovább)
     const pairs = q.valaszok.map((text, originalIndex) => ({ text, originalIndex }));
     const shuffledPairs = shuffle(pairs);
 
     const userSet = new Set();
 
-    if (isMulti) {
+    if (isMulti && elAnswers) {
       const info = document.createElement("div");
       info.className = "small";
       info.textContent = "Jelöld be az összes helyes választ, majd kattints a „Véglegesítés” gombra.";
@@ -243,10 +252,10 @@
         }
       });
 
-      elAnswers.appendChild(div);
+      elAnswers?.appendChild(div);
     });
 
-    if (isMulti) {
+    if (isMulti && elAnswers) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn";
@@ -269,11 +278,12 @@
     if (correct) {
       clickedDiv.classList.add("correct");
       pont++;
-      elScore.textContent = String(pont);
+      if (elScore) elScore.textContent = String(pont);
     } else {
       clickedDiv.classList.add("wrong");
-      // jelöljük meg a helyes(eke)t zölddel
-      const answerDivs = [...elAnswers.querySelectorAll(".answer")];
+
+      // helyes(ek) megjelölése
+      const answerDivs = [...(elAnswers?.querySelectorAll(".answer") ?? [])];
       answerDivs.forEach((div) => {
         const text = div.textContent;
         const pair = shuffledPairs.find(x => x.text === text);
@@ -299,8 +309,8 @@
   function evaluateMulti(shuffledPairs, helyesSet, userSet) {
     const correctAll = setsEqual(userSet, helyesSet);
 
-    // végleges színezés: helyesek zöld, kiválasztott rosszak piros
-    const answerDivs = [...elAnswers.querySelectorAll(".answer")];
+    // végleges színezés
+    const answerDivs = [...(elAnswers?.querySelectorAll(".answer") ?? [])];
 
     answerDivs.forEach((div) => {
       const text = div.textContent;
@@ -318,7 +328,7 @@
 
     if (correctAll) {
       pont++;
-      elScore.textContent = String(pont);
+      if (elScore) elScore.textContent = String(pont);
     }
 
     attempts.push({
@@ -342,10 +352,10 @@
     const total = quiz.length || 1;
     const percent = Math.round((pont / total) * 100);
 
-    elResPoints.textContent = `Eredmény: ${pont} / ${quiz.length}`;
-    elResPercent.textContent = `${percent}%`;
+    if (elResPoints) elResPoints.textContent = `Eredmény: ${pont} / ${quiz.length}`;
+    if (elResPercent) elResPercent.textContent = `${percent}%`;
 
-    // Review
+    if (!elReview) return;
     elReview.innerHTML = "";
 
     attempts.forEach((a, i) => {
@@ -403,7 +413,7 @@
 
     try {
       const text = await file.text();
-      const parsed = parseKerdesekSmart(text); // <-- ez a lényeg
+      const parsed = parseKerdesekSmart(text);
       hide(elLoader);
       resetQuiz(parsed);
     } catch (err) {
@@ -427,5 +437,3 @@
     }
   })();
 })();
-
-
