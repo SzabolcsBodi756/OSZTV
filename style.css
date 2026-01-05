@@ -215,3 +215,9 @@ body{
   border-color: rgba(255,92,92,.7);
   background: rgba(255,92,92,.14);
 }
+
+.answer.picked {
+  border: 2px solid #ffffff;          /* fehér keret */
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.4);
+}
